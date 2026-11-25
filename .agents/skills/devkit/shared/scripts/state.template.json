@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "skill": "devkit",
+  "mode": "standard",
+  "current_phase": "inventory",
+  "current_phase_index": 0,
+  "started_at": null,
+  "updated_at": null,
+  "completed_at": null,
+  "status": "pending",
+  "phases": [
+    {
+      "name": "inventory",
+      "status": "pending",
+      "evidence": null,
+      "gate_type": "none",
+      "approved_by_user": false,
+      "completed_at": null
+    },
+    {
+      "name": "scan",
+      "status": "pending",
+      "evidence": null,
+      "gate_type": "none",
+      "approved_by_user": false,
+      "completed_at": null
+    },
+    {
+      "name": "plan",
+      "status": "pending",
+      "evidence": null,
+      "gate_type": "approval",
+      "approved_by_user": false,
+      "completed_at": null
+    },
+    {
+      "name": "fix",
+      "status": "pending",
+      "evidence": null,
+      "gate_type": "none",
+      "approved_by_user": false,
+      "completed_at": null
+    },
+    {
+      "name": "verify",
+      "status": "pending",
+      "evidence": null,
+      "gate_type": "none",
+      "approved_by_user": false,
+      "completed_at": null
+    },
+    {
+      "name": "report",
+      "status": "pending",
+      "evidence": null,
+      "gate_type": "approval",
+      "approved_by_user": false,
+      "completed_at": null
+    }
+  ],
+  "decisions": [],
+  "open_items": [],
+  "files_touched": []
+}

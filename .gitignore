@@ -1,0 +1,18 @@
+# Dependencies & build output
+node_modules/
+.next/
+out/
+dist/
+build/
+
+# Local environment secrets
+.env
+.env*.local
+
+# devkit audit state and reports
+.devkit/
+
+# Logs & OS files
+npm-debug.log*
+.DS_Store
+Thumbs.db

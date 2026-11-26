@@ -10,6 +10,39 @@ const execFileAsync = promisify(execFile);
 
 const MAX_AUDIO_BYTES = 10 * 1024 * 1024; // 10 MB
 
+async function transcribeWithGroq(
+  audioBlob: Blob,
+  apiKey: string,
+  lang?: string
+): Promise<string | null> {
+  try {
+    const isoLang =
+      typeof lang === "string" && /^[a-z]{2}(?:-[A-Z]{2})?$/i.test(lang.trim())
+        ? lang.trim().split("-")[0].toLowerCase()
+        : "en";
+
+    const form = new FormData();
+    form.append("file", audioBlob, "speech.wav");
+    form.append("model", "whisper-large-v3-turbo");
+    form.append("language", isoLang);
+
+    const res = await fetch(
+      "https://api.groq.com/openai/v1/audio/transcriptions",
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(15000),
+        body: form,
+      }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.text?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 async function transcribeWithDeepgram(
   audioBuffer: Buffer,
   apiKey: string
@@ -125,8 +158,18 @@ export async function POST(req: NextRequest) {
 
     const arrayBuffer = await audioField.arrayBuffer();
     const audioBuffer = Buffer.from(arrayBuffer);
+    const langField = formData.get("lang");
+    const lang = typeof langField === "string" ? langField : undefined;
 
-    const deepgramKey = process.env.DEEPGRAM_API_KEY;
+    const groqKey = process.env.GROQ_API_KEY?.trim();
+    if (groqKey) {
+      const text = await transcribeWithGroq(audioField, groqKey, lang);
+      if (text) {
+        return NextResponse.json({ transcript: text, engine: "groq-whisper" });
+      }
+    }
+
+    const deepgramKey = process.env.DEEPGRAM_API_KEY?.trim();
     if (deepgramKey) {
       const text = await transcribeWithDeepgram(audioBuffer, deepgramKey);
       if (text) {

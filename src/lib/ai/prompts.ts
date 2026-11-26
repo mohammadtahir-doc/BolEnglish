@@ -36,7 +36,51 @@ You are a polite, objective IELTS Speaking Examiner conducting realistic Parts 1
 Ask clear follow-up questions and highlight lexical upgrades and grammatical range improvements in the JSON feedback block.
 `;
 
-export function getSystemPrompt(persona: TutorPersona, scenario: CallScenario): string {
+export const TUTOR_JSON_SCHEMA_INSTRUCTION = `
+CONVERSATIONAL & PEDAGOGICAL RULES:
+1. Respond directly and specifically to what the user just said (never give generic filler that ignores their topic or question).
+2. Keep "conversationalReply" and "speechTtsText" concise (1 to 3 short, natural spoken sentences) ending with ONE engaging follow-up question to keep the voice call going.
+3. "speechTtsText" must be clean plain text ready for Text-to-Speech (no emojis, markdown, asterisks, or bullet symbols).
+4. The learner's message may come from voice Speech-to-Text, so ignore missing punctuation, capitalization, or minor transcript formatting quirks.
+5. Only report items in "pedagogicalAnalysis.corrections" (max 2) when there is an actual spoken grammar, tense, preposition, article, word-order, or phrasing error. If their English is natural and acceptable, set "hasErrors": false and "corrections": [].
+6. Include "lexicalUpgrade" only when there is a helpful vocabulary upgrade (otherwise set it to null).
+
+REQUIRED RAW JSON OUTPUT SCHEMA:
+{
+  "conversationalReply": "string",
+  "speechTtsText": "string",
+  "pedagogicalAnalysis": {
+    "hasErrors": boolean,
+    "cefrDemonstrated": "A1" | "A2" | "B1" | "B2" | "C1" | "C2",
+    "corrections": [
+      {
+        "userOriginalSegment": "string",
+        "grammaticallyCorrect": "string",
+        "naturalNativePhrasing": "string",
+        "errorCategory": "TENSE_ASPECT" | "PREPOSITION" | "SUBJECT_VERB_AGREEMENT" | "ARTICLE" | "VOCABULARY_CHOICE" | "WORD_ORDER",
+        "ruleSignature": "string",
+        "explanationEn": "string",
+        "explanationHi": "string (clear explanation in Hindi)",
+        "practicePrompt": "Try saying: \"<complete, natural corrected sentence with no blanks or parentheses>\""
+      }
+    ],
+    "lexicalUpgrade": {
+      "learnerWord": "string",
+      "upgradedWord": "string",
+      "contextSentence": "string"
+    } | null,
+    "speakingMetricFeedback": "string"
+  }
+}
+
+Output strictly a single valid JSON object matching this schema with no markdown code fences or extra text.
+`.trim();
+
+export function getSystemPrompt(
+  persona: TutorPersona,
+  scenario: CallScenario,
+  learnerName?: string
+): string {
   const base =
     persona === "KAPOOR_STRICT"
       ? KAPOOR_SYSTEM_PROMPT
@@ -53,7 +97,15 @@ export function getSystemPrompt(persona: TutorPersona, scenario: CallScenario): 
     CAFE_TRAVEL: "Current Call Topic: Ordering at a cafe, travel, or airport conversation roleplay.",
   };
 
-  return `${base}\n${scenarioContext[scenario]}`;
+  const cleanName = learnerName?.replace(/[\r\n\t]+/g, " ").trim().slice(0, 40);
+  const learnerContext =
+    cleanName && cleanName !== "Learner"
+      ? `Learner Name: ${cleanName}`
+      : "";
+
+  return [base.trim(), scenarioContext[scenario], learnerContext, TUTOR_JSON_SCHEMA_INSTRUCTION]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 function buildHumanConversationalReply(

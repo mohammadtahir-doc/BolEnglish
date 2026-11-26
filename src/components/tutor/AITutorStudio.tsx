@@ -120,6 +120,7 @@ export function AITutorStudio() {
     LexicalUpgrade | undefined
   >();
   const [isLoading, setIsLoading] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   const hasManualPersonaChangeRef = useRef(false);
   const hasManualScenarioChangeRef = useRef(Boolean(urlScenario));
@@ -169,39 +170,42 @@ export function AITutorStudio() {
 
   const handleSendMessage = useCallback(
     async (userText: string) => {
-      if (!userText.trim() || isLoading) return;
+      const trimmed = userText.trim();
+      if (!trimmed || isLoading) return;
 
       const userMsg: TutorMessage = {
         id: `usr-${Date.now()}`,
         role: "user",
-        content: userText.trim(),
+        content: trimmed,
         timestamp: "Just now",
       };
 
-      const nextHistory = [...messages, userMsg].map((m) => ({
+      const historyPayload = messages.map((m) => ({
         role: m.role,
         content: m.content,
       }));
 
       setMessages((prev) => [...prev, userMsg]);
       setTextInput("");
+      setApiError(null);
       setIsLoading(true);
-      recordAISpeakingTurn(5);
 
       try {
         const response = await fetch("/api/tutor/message", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            message: userText.trim(),
+            message: trimmed,
             persona,
             scenario,
-            history: nextHistory,
+            learnerName: state.learnerName,
+            history: historyPayload,
           }),
         });
 
-        if (response.ok) {
-          const data = await response.json();
+        const data = await response.json().catch(() => null);
+
+        if (response.ok && data && typeof data.conversationalReply === "string") {
           const aiMsg: TutorMessage = {
             id: `ai-${Date.now()}`,
             role: "assistant",
@@ -211,27 +215,27 @@ export function AITutorStudio() {
           };
 
           setMessages((prev) => [...prev, aiMsg]);
+          recordAISpeakingTurn(5);
 
-          if (data.pedagogicalAnalysis?.corrections) {
-            setActiveCorrections(data.pedagogicalAnalysis.corrections);
-          }
-          if (data.pedagogicalAnalysis?.lexicalUpgrade) {
-            setActiveLexicalUpgrade(data.pedagogicalAnalysis.lexicalUpgrade);
-          }
+          setActiveCorrections(
+            Array.isArray(data.pedagogicalAnalysis?.corrections)
+              ? data.pedagogicalAnalysis.corrections
+              : []
+          );
+          setActiveLexicalUpgrade(
+            data.pedagogicalAnalysis?.lexicalUpgrade ?? undefined
+          );
 
           speakText(data.speechTtsText || data.conversationalReply);
         } else {
-          throw new Error("Failed to get response");
+          const message =
+            data && typeof data.error === "string"
+              ? data.error
+              : "Could not get a response from the AI tutor. Please try again.";
+          setApiError(message);
         }
       } catch {
-        const fallbackMsg: TutorMessage = {
-          id: `ai-${Date.now()}`,
-          role: "assistant",
-          content: "I hear you! Could you tell me a bit more about that?",
-          timestamp: "Just now",
-        };
-        setMessages((prev) => [...prev, fallbackMsg]);
-        speakText(fallbackMsg.content);
+        setApiError("Network error while contacting AI tutor. Please try again.");
       } finally {
         setIsLoading(false);
       }
@@ -241,6 +245,7 @@ export function AITutorStudio() {
       messages,
       persona,
       scenario,
+      state.learnerName,
       recordAISpeakingTurn,
       speakText,
     ]
@@ -342,6 +347,7 @@ export function AITutorStudio() {
     setMessages(createInitialMessages(persona, nextScenario, state.learnerName));
     setActiveCorrections([]);
     setActiveLexicalUpgrade(undefined);
+    setApiError(null);
   };
 
   const handleResetSession = () => {
@@ -354,6 +360,7 @@ export function AITutorStudio() {
     setMessages(createInitialMessages(persona, scenario, state.learnerName));
     setActiveCorrections([]);
     setActiveLexicalUpgrade(undefined);
+    setApiError(null);
     setTextInput("");
   };
 
@@ -498,8 +505,24 @@ export function AITutorStudio() {
         <MicErrorBanner error={micError} />
       </div>
 
+      {apiError && (
+        <div
+          role="alert"
+          className="rounded-2xl bg-red-50 border border-red-200 px-4 py-3 text-xs sm:text-sm font-semibold text-red-800 flex items-center justify-between gap-3"
+        >
+          <span>{apiError}</span>
+          <button
+            type="button"
+            onClick={() => setApiError(null)}
+            className="px-3 py-2 rounded-xl text-xs font-bold text-red-700 hover:bg-red-100 transition-colors shrink-0 cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Real-Time Pedagogical Drawer */}
-      {activeCorrections.length > 0 && (
+      {(activeCorrections.length > 0 || Boolean(activeLexicalUpgrade)) && (
         <PedagogicDrawer
           corrections={activeCorrections}
           lexicalUpgrade={activeLexicalUpgrade}
